@@ -65,6 +65,7 @@ export const createColumns = (showEmbeddingListFn: Function, showGraphFn: Functi
           renderElements.push(createText(row.graphicalStatusChangeTime))
         } else if (row.graphicalStatus === 'FAIL') {
           renderElements.push(createText('失败'))
+          renderElements.push(createShowListButton(showGraphFn, row))
           renderElements.push(createText(row.graphicalStatusChangeTime))
         }
         return h('div', { class: 'flex flex-col' }, {

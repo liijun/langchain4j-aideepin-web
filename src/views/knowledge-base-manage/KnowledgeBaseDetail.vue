@@ -1,6 +1,6 @@
 <script setup lang='ts'>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
-import { NAlert, NBreadcrumb, NBreadcrumbItem, NButton, NCard, NCheckbox, NCheckboxGroup, NDataTable, NFlex, NIcon, NInput, NModal, NP, NSpace, NTag, NText, NUpload, NUploadDragger, useDialog, useMessage } from 'naive-ui'
+import { NAlert, NBreadcrumb, NBreadcrumbItem, NButton, NCard, NCheckbox, NCheckboxGroup, NDataTable, NFlex, NIcon, NInput, NModal, NP, NSpace, NTag, NText, NUpload, NUploadDragger, useDialog, useMessage, NSelect} from 'naive-ui'
 import { ArchiveOutline } from '@vicons/ionicons5'
 import { Cloud32Regular, LockClosed32Regular } from '@vicons/fluent'
 import { useRoute } from 'vue-router'
@@ -30,6 +30,8 @@ const submitting = ref<boolean>(false)
 const showItemEditModal = ref<boolean>(false)
 const showUploadModal = ref<boolean>(false)
 const showIndexModal = ref<boolean>(false)
+const localPath = ref<string>('')
+const showBatchImportModal = ref<boolean>(false)
 const itemList = ref<KnowledgeBase.Item[]>([])
 const indexAfterUpload = ref(false)
 const indexTypeSelected = ref<string[]>(['embedding'])
@@ -41,8 +43,18 @@ const paginationReactive = reactive({
   page: 1,
   pageSize: 20,
   itemCount: 0,
+  pageSizes: [10, 20, 50],
+  onChange: (page: number) => {
+    paginationReactive.page = page
+  },
+  onUpdatePageSize: (pageSize: number) => {
+    paginationReactive.pageSize = pageSize
+    paginationReactive.page = 1
+  }
 })
-const searchValue = ref<string>('')
+const searchValue = ref<string>('') 
+const embeddingStatus = ref<string>('')
+const graphicalStatus = ref<string>('')
 const tmpItem = reactive<KnowledgeBase.Item>(knowledgeBaseEmptyItem())
 // 控制 input 按钮
 const inputStatus = computed(() => tmpItem.title.trim().length < 1 && !submitting.value)
@@ -78,7 +90,7 @@ const showFileContent = (selected: KnowledgeBase.Item = knowledgeBaseEmptyItem()
   // window.open(`/api${selected.sourceFileUrl}?token=${token.value}`, '_blank')
   previewFileContent.value = ''
   previewFileName.value = ''
-  previewFileUrl.value = `${selected.sourceFileUrl}?token=${token.value}`
+  previewFileUrl.value = `/api${selected.sourceFileUrl}?token=${token.value}`
   previewFileName.value = selected.sourceFileName
   console.log('previewFileUrl', previewFileUrl.value)
   const ext = selected.sourceFileName.substring(selected.sourceFileName.lastIndexOf('.') + 1)
@@ -126,9 +138,13 @@ const showGraph = (selected: KnowledgeBase.Item = knowledgeBaseEmptyItem()) => {
   kbItemUuidForGraph.value = selected.uuid
 }
 
-const changeEditModal = (selected: KnowledgeBase.Item = knowledgeBaseEmptyItem()) => {
+const  changeEditModal = (selected: KnowledgeBase.Item = knowledgeBaseEmptyItem()) => {
+  console.log(selected);
   if (selected.kbId !== '0') {
-    Object.assign(tmpItem, selected)
+     api.knowledgeBaseItemInfo(selected.uuid).then((resp) => {
+        console.log(resp);
+        Object.assign(tmpItem, resp.data)
+     })
   } else {
     Object.assign(tmpItem, knowledgeBaseEmptyItem())
     tmpItem.kbId = curKnowledgeBase.id
@@ -145,6 +161,11 @@ const columns = createColumns(showEmbeddingList, showGraph, showFileContent, cha
 
 function changeIndexModal() {
   showIndexModal.value = true
+}
+
+
+function batchImportModal() {
+  showBatchImportModal.value = true
 }
 
 /**
@@ -169,7 +190,7 @@ async function textIndexing() {
     await api.knowledgeBaseItemsIndexing(checkedItemRowKeys.value, indexTypeSelected.value)
     indexingCheck()
     ms.success('索引任务后台执行中')
-    search(1)
+    search(paginationReactive.page)
   } catch (error: any) {
     ms.error(error.message ?? 'error')
   } finally {
@@ -184,7 +205,7 @@ async function textIndexing() {
 async function indexingCheck() {
   const response = await api.knowledgeBaseIndexingCheck()
   if (response.data) {
-    search(1)
+       search(paginationReactive.page)
   } else {
     setTimeout(() => {
       indexingCheck()
@@ -264,7 +285,7 @@ function onUploadFinish({
 async function search(currentPage: number) {
   loading.value = true
   try {
-    const resp = await api.knowledgeBaseItemSearch<PageResponse>(currentPage, paginationReactive.pageSize, curKbUuid, searchValue.value)
+    const resp = await api.knowledgeBaseItemSearch<PageResponse>(currentPage, paginationReactive.pageSize, curKbUuid, searchValue.value, embeddingStatus.value, graphicalStatus.value)
     setResp(currentPage, resp.data)
   } finally {
     loading.value = false
@@ -286,7 +307,7 @@ async function saveOrUpdate() {
     submitting.value = false
     showItemEditModal.value = false
     Object.assign(tmpItem, knowledgeBaseEmptyItem())
-    search(1)
+    search(paginationReactive.page)
   }
 }
 
@@ -325,6 +346,45 @@ watch(
   },
   { immediate: true },
 )
+
+/**
+ * 检查索引是否已经完成，如果已完成，则刷新列表
+ */
+async function saveBatchImport() {
+  showBatchImportModal.value = false
+  const response = await api.knowledgeBaseBatchImport(curKbUuid,localPath.value)
+  if (response.data) {
+    search(1)
+  } else {
+    console.log(response)
+  }
+}
+
+const embeddingStatusOptions: { label: string; key: string; value: string }[] = [
+  { label: '全部', key: '', value: '' },
+  { label: '待向量化', key: '1', value: '1' },
+  { label: '处理向量化', key: '2', value: '2' },
+  { label: '已向量化', key: '3', value: '3' },
+  { label: '失败', key: '4', value: '4' },
+]
+
+const graphicalStatusOptions: { label: string; key: string; value: string }[] = [
+  { label: '全部', key: '', value: '' },
+  { label: '待图谱化', key: '1', value: '1' },
+  { label: '处理图谱化', key: '2', value: '2' },
+  { label: '已图谱化', key: '3', value: '3' },
+  { label: '失败', key: '4', value: '4' },
+]
+// const emit = defineEmits<Emit>()
+// interface Emit {
+//   (e: 'nodeSelected', uuid: string): void
+// }
+
+// function handleSelect(value: string) {
+//   console.log('node selected', value)
+//   emit('nodeSelected', value)
+// }
+
 </script>
 
 <template>
@@ -365,9 +425,18 @@ watch(
               ({{ checkedItemRowKeys.length }}项)
             </template>
           </NButton>
+          <NButton type="info" size="small" @click="batchImportModal()">
+            批量导入
+          </NButton>
         </div>
         <div class="flex items-center">
           <NInput v-model:value="searchValue" style="width: 100%" @keyup="onKeyUpSearch" />
+          <NSelect
+             v-model:value ="embeddingStatus" :options="embeddingStatusOptions" trigger="click" 
+          />
+          <NSelect
+             v-model:value ="graphicalStatus" :options="graphicalStatusOptions" trigger="click" 
+          />
           <NButton type="primary" ghost @click="search(1)">
             搜索
           </NButton>
@@ -388,7 +457,7 @@ watch(
       <NInput v-model:value="tmpItem.title" maxlength="100" show-count />
       摘要
       <NInput
-        v-model:value="tmpItem.brief" type="textarea" maxlength="200" show-count
+        v-model:value="tmpItem.brief" type="textarea" maxlength="1000" show-count
         :autosize="{ minRows: 2, maxRows: 5 }"
       />
       内容
@@ -488,5 +557,19 @@ watch(
         点击下载：{{ previewFileName }}
       </NButton>
     </template>
+  </NModal>
+  <NModal v-model:show="showBatchImportModal" style="width: 90%; max-height: 700px;" preset="card" title="知识点-导入">
+    <NSpace vertical>
+      本地路径
+      <NInput
+        v-model:value="localPath" type="textarea" maxlength="200" show-count
+        :autosize="{ minRows: 2, maxRows: 5 }"
+      />
+      <div class="flex juestify-end">
+        <NButton type="primary" @click="() => { saveBatchImport() }">
+          {{ t('common.confirm') }}
+        </NButton>
+      </div>
+    </NSpace>
   </NModal>
 </template>

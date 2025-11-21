@@ -506,10 +506,18 @@ function knowledgeBaseIndexingCheck<T = any>() {
   })
 }
 
-function knowledgeBaseItemSearch<T>(currentPage: number, pageSize: number, kbUuid: string, keyword?: string) {
+function knowledgeBaseItemSearch<T>(currentPage: number, pageSize: number, kbUuid: string, keyword?: string, embeddingStatus?: string, graphicalStatus?: string) {
   const search = keyword === undefined ? '' : `keyword=${keyword}&`
+  const searchembeddingStatus = embeddingStatus === undefined ? '' : `embeddingStatus=${embeddingStatus}&`
+  const searchgraphicalStatus = graphicalStatus === undefined ? '' : `graphicalStatus=${graphicalStatus}&`
   return get<T>({
-    url: `/knowledge-base-item/search?${search}kbUuid=${kbUuid}&currentPage=${currentPage}&pageSize=${pageSize}`,
+    url: `/knowledge-base-item/search?${search}${searchembeddingStatus}${searchgraphicalStatus}kbUuid=${kbUuid}&currentPage=${currentPage}&pageSize=${pageSize}`,
+  })
+}
+
+function knowledgeBaseItemInfo<T = any>(uuid: string) {
+  return get<T>({
+    url: `/knowledge-base-item/info/${uuid}`,
   })
 }
 
@@ -592,7 +600,11 @@ function knowledgeBaseStarListMine<T = any>(currentPage: number, pageSize: numbe
     url: `/knowledge-base/star/mine?currentPage=${currentPage}&pageSize=${pageSize}`,
   })
 }
-
+function knowledgeBaseBatchImport<T = any>(uuid: string,filepath: string) {
+  return post<T>({
+    url: `/knowledge-base/batchImport/${uuid}?localFilelPath=${filepath}`,
+  })
+}
 function loadLLMs<T = any>() {
   return get<T>({
     url: '/model/llms',
@@ -828,6 +840,7 @@ export default {
   knowledgeBaseDelete,
   knowledgeBaseItemSaveOrUpdate,
   knowledgeBaseItemSearch,
+  knowledgeBaseItemInfo,
   knowledgeBaseItemDelete,
   knowledgeBaseItemsIndexing,
   knowledgeBaseIndexingCheck,
@@ -841,6 +854,7 @@ export default {
   knowledgeBaseEmbeddingRef,
   knowledgeBaseGraphRef,
   knowledgeBaseStarListMine,
+  knowledgeBaseBatchImport,
   loadSearchEngines,
   loadLLMs,
   loadImageModels,
