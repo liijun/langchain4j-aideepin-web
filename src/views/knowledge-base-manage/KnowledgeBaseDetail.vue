@@ -25,6 +25,8 @@ const showGraphModal = ref<boolean>(false)
 const kbItemUuidForEmbeddingList = ref<string>('')
 const kbItemUuidForGraph = ref<string>('')
 
+const modalMainHeight = ref<number>(500)
+const tableMaxHeight = ref<number>(500)
 const loading = ref<boolean>(false)
 const submitting = ref<boolean>(false)
 const showItemEditModal = ref<boolean>(false)
@@ -41,7 +43,7 @@ const fileListLength = ref(0)
 const fileList = ref<UploadFileInfo[]>([])
 const paginationReactive = reactive({
   page: 1,
-  pageSize: 20,
+  pageSize: 10,
   itemCount: 0,
   pageSizes: [10, 20, 50],
   showSizePicker: true,
@@ -219,7 +221,18 @@ function onHandleCheckedRowKeys(keys: Array<string | number>, rows: object[], me
   checkedItemRowKeys.value = keys.map((key) => {
     return `${key}`
   })
-  checkedItems.value = rows as KnowledgeBase.Item[]
+  // 跨页面选择时，rows 中的非当前页的数据为 null，所以将 null 过滤掉，并将非当前页的值填充
+  const itemMap = new Map<string, KnowledgeBase.Item>()
+  const tmpItems = [] as KnowledgeBase.Item[]
+  tmpItems.push(...(rows as KnowledgeBase.Item[]))
+  tmpItems.push(...checkedItems.value)
+  tmpItems.forEach((item) => {
+    if (item)
+      itemMap.set(item.uuid, item)
+  })
+  checkedItems.value = Array.from(itemMap.entries())
+    .filter(([key]) => checkedItemRowKeys.value.includes(key))
+    .map(([, value]) => value)
 }
 
 function removeCheckedItem(item: KnowledgeBase.Item) {
@@ -335,6 +348,8 @@ async function initData() {
 }
 
 onMounted(async () => {
+  modalMainHeight.value = window.innerHeight - 150
+  tableMaxHeight.value = window.innerHeight - 420
   if (curKnowledgeBase.title === '')
     await initData()
 })
@@ -445,23 +460,22 @@ const graphicalStatusOptions: { label: string; key: string; value: string }[] = 
         </div>
       </div>
       <NDataTable
-        remote :loading="loading" :max-height="400" :columns="columns" :data="itemList"
-        :pagination="paginationReactive" :single-line="false" :bordered="true" :row-key="rowKey"
-        :checked-row-keys="checkedItemRowKeys" @update:checked-row-keys="onHandleCheckedRowKeys"
-        @update:page="onHandlePageChange"
+        remote :loading="loading" :max-height="tableMaxHeight" :columns="columns" :data="itemList" :pagination="paginationReactive"
+        :single-line="false" :bordered="true" :row-key="rowKey" :checked-row-keys="checkedItemRowKeys"
+        @update:checked-row-keys="onHandleCheckedRowKeys" @update:page="onHandlePageChange"
       />
     </NCard>
   </div>
 
-  <NModal v-model:show="showItemEditModal" style="width: 90%; max-height: 700px;" preset="card" title="知识点-新增|编辑">
+  <NModal
+    v-model:show="showItemEditModal" :style="`width: 90%; min-height:500px; max-height: ${modalMainHeight}px`" preset="card"
+    title="知识点-新增|编辑"
+  >
     <NSpace vertical>
       {{ t('store.title') }}
       <NInput v-model:value="tmpItem.title" maxlength="100" show-count />
       摘要
-      <NInput
-        v-model:value="tmpItem.brief" type="textarea" maxlength="1000" show-count
-        :autosize="{ minRows: 2, maxRows: 5 }"
-      />
+      <NInput v-model:value="tmpItem.brief" type="textarea" show-count :autosize="{ minRows: 2, maxRows: 5 }" />
       内容
       <NInput v-model:value="tmpItem.remark" type="textarea" show-count :autosize="{ minRows: 5, maxRows: 10 }" />
       <div class="flex juestify-end">
@@ -473,7 +487,7 @@ const graphicalStatusOptions: { label: string; key: string; value: string }[] = 
   </NModal>
 
   <!-- Upload files -->
-  <NModal v-model:show="showUploadModal" style="width: 90%; max-height: 700px;" preset="card" title="知识点-上传">
+  <NModal v-model:show="showUploadModal" style="width: 90%;  min-height: 700px;" preset="card" title="知识点-上传">
     <NCard style="margin-top: 12px" title="上传文档以生成知识点" hoverable>
       <NSpace vertical>
         <NUpload
@@ -543,7 +557,7 @@ const graphicalStatusOptions: { label: string; key: string; value: string }[] = 
     </NFlex>
   </NModal>
   <NModal v-model:show="showFileContentModal" style="width: 90%; " preset="card" :title="`文件预览: ${previewFileName}`">
-    <div style="text-align: center;max-height:600px;overflow-y: auto">
+    <div style="text-align: center;max-height:700px;overflow-y: auto">
       <div v-if="previewFileUrl && previewMimeType === 'text/plain'">
         {{ previewFileContent }}
       </div>
