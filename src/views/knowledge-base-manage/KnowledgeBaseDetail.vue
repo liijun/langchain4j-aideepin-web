@@ -44,6 +44,8 @@ const paginationReactive = reactive({
   pageSize: 20,
   itemCount: 0,
   pageSizes: [10, 20, 50],
+  showSizePicker: true,
+  showQuickJumper: true,
   onChange: (page: number) => {
     paginationReactive.page = page
   },
